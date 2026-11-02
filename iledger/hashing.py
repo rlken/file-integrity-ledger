@@ -40,9 +40,16 @@ def fingerprint(path: Path) -> dict:
     current = path.lstat()
 
     def identity(info):
-        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
 
-    if not all(identity(info) == identity(initial) for info in (before, after, current)):
+    # On Windows, lstat and fstat can report different ctime meanings (CPython
+    # issue #157671). Compare ctime only within the same API, retaining both
+    # path and descriptor change checks rather than ignoring it altogether.
+    if (
+        not all(identity(info) == identity(initial) for info in (before, after, current))
+        or initial.st_ctime_ns != current.st_ctime_ns
+        or before.st_ctime_ns != after.st_ctime_ns
+    ):
         raise OSError("file changed during hashing; retry with a stable copy")
     return {"sha256": digest.hexdigest(), "size": after.st_size, "mtime_ns": after.st_mtime_ns}
 

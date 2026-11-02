@@ -76,6 +76,50 @@ class HashingTests(FilesystemTestCase):
         )
         self.assertTrue(is_link_or_reparse(info))
 
+    def test_path_and_descriptor_ctime_can_have_different_meanings(self):
+        file = self.root / "ctime.txt"
+        file.write_bytes(b"stable")
+        info = file.lstat()
+        descriptor_info = SimpleNamespace(
+            **{
+                name: getattr(info, name)
+                for name in ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns")
+            },
+            st_ctime_ns=info.st_ctime_ns + 1000,
+        )
+        with patch("iledger.hashing.os.fstat", return_value=descriptor_info):
+            self.assertEqual(sha256_file(file), hashlib.sha256(b"stable").hexdigest())
+
+    def test_descriptor_ctime_change_still_rejects_the_read(self):
+        file = self.root / "ctime.txt"
+        file.write_bytes(b"stable")
+        info = file.lstat()
+        changed_info = SimpleNamespace(
+            **{
+                name: getattr(info, name)
+                for name in ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns")
+            },
+            st_ctime_ns=info.st_ctime_ns + 1000,
+        )
+        with patch("iledger.hashing.os.fstat", side_effect=[info, changed_info]):
+            with self.assertRaisesRegex(OSError, "changed during hashing"):
+                fingerprint(file)
+
+    def test_path_ctime_change_still_rejects_the_read(self):
+        file = self.root / "ctime.txt"
+        file.write_bytes(b"stable")
+        info = file.lstat()
+        changed_info = SimpleNamespace(
+            **{
+                name: getattr(info, name)
+                for name in ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns")
+            },
+            st_ctime_ns=info.st_ctime_ns + 1000,
+        )
+        with patch.object(Path, "lstat", side_effect=[info, changed_info]):
+            with self.assertRaisesRegex(OSError, "changed during hashing"):
+                fingerprint(file)
+
     @unittest.skipUnless(os.name == "nt", "Windows junction integration test")
     def test_junction_is_rejected_without_traversing_target(self):
         outside = self.root / "outside"

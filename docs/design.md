@@ -104,6 +104,12 @@ descending into directories, covering junctions as well as symbolic links.
 This intentionally rejects cloud reparse points rather than silently following
 them. It does not protect against all ancestor-directory races.
 
+Windows Python can assign different meanings to `ctime` from path-based `lstat`
+and descriptor-based `fstat` ([CPython issue #157671](https://github.com/python/cpython/issues/157671)).
+The scanner compares file identity, size, and mtime across both APIs, but compares
+ctime only within each API before and after reading. This avoids false change
+reports without removing ctime-based change detection.
+
 Manifest validation accepts absolute POSIX, drive-letter, and UNC roots on any
 platform. A root belonging to another platform requires an explicit `--root`
 when checking; inspection does not need the original path to exist. Relative
