@@ -12,6 +12,11 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
+On Windows PowerShell, use `py -3 -m venv .venv`, then
+`.\.venv\Scripts\python.exe -m pip install -e '.[dev]'`. In the checks below,
+replace `python` with `.\.venv\Scripts\python.exe` and `ruff` with
+`.\.venv\Scripts\python.exe -m ruff`; activation is optional.
+
 Before submitting a change:
 
 ```sh
@@ -21,7 +26,15 @@ python -m coverage run -m unittest discover -s tests -v
 python -m coverage report
 python scripts/demo.py
 python -m build
+python scripts/smoke_wheel.py
 ```
+
+The wheel smoke test expects exactly one wheel in `dist/`. Move old version
+builds elsewhere before running it. CI uses a fresh checkout for each job.
+
+POSIX named-pipe tests skip on Windows; Windows junction tests skip elsewhere.
+Symlink tests skip only if Windows refuses link creation without Developer Mode
+or elevation. Ordinary tool usage does not require either privilege.
 
 For a behavior change, add a regression test that would fail before the fix and
 update the relevant command or design documentation. Preserve the distinction

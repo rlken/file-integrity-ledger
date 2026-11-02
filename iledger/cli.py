@@ -99,6 +99,8 @@ def check(
     """Compare contents. Exit codes: 0 unchanged, 1 changed, 2 incomplete/error."""
     try:
         manifest = load_manifest(baseline_path.expanduser())
+        if root is None and not Path(manifest["root"]).is_absolute():
+            raise ValueError("baseline root is from another platform; use --root to select a copy")
         target = (root.expanduser() if root else Path(manifest["root"])).resolve(strict=True)
         current, errors = scan_directory(target, manifest["excludes"])
         differences = compare_files(manifest["files"], current, errors)

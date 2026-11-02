@@ -1,17 +1,17 @@
 import json
 import os
 import tempfile
-import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from helpers import FilesystemTestCase
 from typer.testing import CliRunner
 
 from iledger.cli import app
 from iledger.storage import compare_files, load_manifest
 
 
-class CliTests(unittest.TestCase):
+class CliTests(FilesystemTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -75,7 +75,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(self.invoke("check", self.baseline).exit_code, 0)
 
     def test_scan_failure_never_writes_baseline(self):
-        (self.root / "link").symlink_to("absent")
+        self.symlink(self.root / "link", "absent")
         self.assertEqual(self.invoke("baseline", self.root).exit_code, 2)
         self.assertFalse(self.baseline.exists())
         self.create_baseline("--exclude", "link")
@@ -151,7 +151,7 @@ class CliTests(unittest.TestCase):
         target = self.root / "keep"
         target.write_text("do not replace")
         output = self.root / "alias"
-        output.symlink_to(target)
+        self.symlink(output, target)
         result = self.invoke("baseline", self.root, "-o", output, "--force")
         self.assertEqual(result.exit_code, 2)
         self.assertEqual(target.read_text(), "do not replace")
@@ -161,7 +161,7 @@ class CliTests(unittest.TestCase):
 
     def test_human_readable_scan_error_and_invalid_inspect(self):
         self.create_baseline()
-        (self.root / "link").symlink_to("absent")
+        self.symlink(self.root / "link", "absent")
         result = self.invoke("check", self.baseline)
         self.assertEqual(result.exit_code, 2)
         self.assertIn("incomplete", result.output.lower())
@@ -175,3 +175,15 @@ class CliTests(unittest.TestCase):
         (self.root / "sample").write_text("changed")
         self.assertEqual(self.invoke("check", self.baseline).exit_code, 1)
         self.assertEqual(self.baseline.read_bytes(), original)
+
+    def test_foreign_platform_baseline_works_with_explicit_root(self):
+        (self.root / "sample").write_bytes(b"same bytes\r\n")
+        self.create_baseline()
+        data = load_manifest(self.baseline)
+        data["root"] = "/home/analyst/evidence" if os.name == "nt" else "C:\\Cases\\evidence"
+        self.baseline.write_text(json.dumps(data), encoding="utf-8")
+        self.assertEqual(self.invoke("inspect", self.baseline).exit_code, 0)
+        result = self.invoke("check", self.baseline, "--json")
+        self.assertEqual(result.exit_code, 2)
+        self.assertIn("--root", json.loads(result.output)["error"])
+        self.assertEqual(self.invoke("check", self.baseline, "--root", self.root).exit_code, 0)

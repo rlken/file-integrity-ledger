@@ -124,3 +124,18 @@ class StorageTests(unittest.TestCase):
         self.manifest["files"] = {"line\nbreak.txt": self.record}
         save_manifest(self.destination, self.manifest)
         self.assertEqual(json.loads(self.destination.read_text()), self.manifest)
+
+    def test_manifest_roots_are_portable_between_platforms(self):
+        for root in (
+            "/home/analyst/evidence",
+            "C:\\Cases\\evidence",
+            "\\\\server\\share\\evidence",
+        ):
+            with self.subTest(root=root):
+                self.manifest["root"] = root
+                self.assertEqual(validate_manifest(self.manifest)["root"], root)
+
+    def test_drive_relative_root_is_rejected(self):
+        self.manifest["root"] = "C:evidence"
+        with self.assertRaisesRegex(ValueError, "absolute path"):
+            validate_manifest(self.manifest)

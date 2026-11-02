@@ -8,6 +8,7 @@
 | `storage.py` | Validate and atomically save manifests; compare file records. |
 | `cli.py` | Parse commands, format results, and choose process exit codes. |
 | `scripts/demo.py` | Exercise the installed command with fictional evidence. |
+| `scripts/smoke_wheel.py` | Install and exercise a wheel outside the checkout on any supported OS. |
 
 ## Why these choices?
 
@@ -39,7 +40,8 @@ does not claim the entire folder has been verified.
 
 **Atomic manifest writes.** The tool writes JSON to a temporary file in the same
 directory, flushes and syncs the file, then publishes it. A hard link provides
-create-if-absent behavior; explicit `--force` uses atomic replacement. Failures
+create-if-absent behavior on POSIX; on Windows, `os.rename` refuses an existing
+destination and does not require hard-link support. Explicit `--force` uses atomic replacement. Failures
 remove the temporary file. This requires a filesystem that supports those
 operations and is not a guarantee of directory-entry durability after sudden
 power loss.
@@ -90,4 +92,22 @@ even when `--json` is present. Checks never update the baseline.
 - CI runs formatting/lint checks, a 90% coverage floor, the executable demo, and
   an isolated wheel-install smoke test.
 
-The CI matrix targets Python 3.9 and 3.14 on Linux and Python 3.14 on macOS.
+The CI matrix targets Python 3.9 and 3.14 on Linux and Windows, plus Python 3.14
+on macOS. The wheel smoke test runs on Linux and Windows, using each platform's
+virtual-environment executable layout and paths containing spaces.
+
+## Windows portability
+
+Raw file descriptors include `O_BINARY` on Windows to preserve CRLF and control-Z
+bytes. The scanner checks the reparse-point attribute before reading files or
+descending into directories, covering junctions as well as symbolic links.
+This intentionally rejects cloud reparse points rather than silently following
+them. It does not protect against all ancestor-directory races.
+
+Manifest validation accepts absolute POSIX, drive-letter, and UNC roots on any
+platform. A root belonging to another platform requires an explicit `--root`
+when checking; inspection does not need the original path to exist. Relative
+paths remain POSIX-style and are compared case-sensitively.
+
+These choices follow Python's documented
+[OS file operations and Windows attributes](https://docs.python.org/3/library/os.html).

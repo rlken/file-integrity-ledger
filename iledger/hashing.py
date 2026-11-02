@@ -9,15 +9,29 @@ from pathlib import Path
 DEFAULT_EXCLUDES = (".git", ".venv", "__pycache__", ".iledger")
 
 
+def is_link_or_reparse(info) -> bool:
+    """Include Windows junctions and other reparse points, not just symlinks."""
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    )
+
+
 def fingerprint(path: Path) -> dict:
     """Reject links/special files and detect common changes during a read."""
     initial = path.lstat()
-    if not stat.S_ISREG(initial.st_mode):
-        raise OSError("not a regular file (links and special files are not followed)")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    if is_link_or_reparse(initial) or not stat.S_ISREG(initial.st_mode):
+        raise OSError(
+            "not a regular file (links, reparse points, and special files are not followed)"
+        )
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_BINARY", 0)
+    )
     with os.fdopen(os.open(path, flags), "rb") as stream:
         before = os.fstat(stream.fileno())
-        if not stat.S_ISREG(before.st_mode):
+        if is_link_or_reparse(before) or not stat.S_ISREG(before.st_mode):
             raise OSError("file type changed before reading")
         digest = hashlib.sha256()
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -68,9 +82,15 @@ def scan_directory(root: Path, excludes=DEFAULT_EXCLUDES):
             relative = path.relative_to(root).as_posix()
             if is_excluded(relative, excludes):
                 dirs.remove(name)
-            elif path.is_symlink():
+                continue
+            try:
+                if is_link_or_reparse(path.lstat()):
+                    raise OSError(
+                        "link or reparse point directory; exclude it explicitly to skip it"
+                    )
+            except OSError as error:
                 dirs.remove(name)
-                errors[relative] = "symbolic link directory; exclude it explicitly to skip it"
+                errors[relative] = str(error)
         dirs.sort()
         for name in sorted(names):
             path = parent / name

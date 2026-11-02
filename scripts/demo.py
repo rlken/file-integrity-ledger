@@ -1,4 +1,4 @@
-"""Run from the project root: .venv/bin/python scripts/demo.py."""
+"""Run from an installed checkout with its virtual environment's Python."""
 
 import json
 import subprocess
@@ -35,16 +35,16 @@ def main():
     baseline = output / "baseline.json"
     run("baseline", evidence, "-o", baseline)
     run("check", baseline)
-    (evidence / "notes.txt").write_text("Interview time changed to 11:00.\n")
+    (evidence / "notes.txt").write_text("Interview time changed to 11:00.\n", encoding="utf-8")
     (evidence / "photo.txt").unlink()
-    (evidence / "new-file.txt").write_text("A file appeared after acquisition.\n")
+    (evidence / "new-file.txt").write_text("A file appeared after acquisition.\n", encoding="utf-8")
     run("check", baseline, expected=1)
     report = run("check", baseline, "--json", expected=1, capture=True)
     parsed = json.loads(report)
     assert parsed["added"] == ["new-file.txt"]
     assert parsed["modified"] == ["notes.txt"]
     assert parsed["missing"] == ["photo.txt"]
-    (output / "report.json").write_text(report)
+    (output / "report.json").write_text(report, encoding="utf-8")
     print(f"\nDemo passed. Files, baseline, and report are available at:\n{output}")
 
 

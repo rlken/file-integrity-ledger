@@ -1,6 +1,6 @@
 [project]
 name = "iledger"
-version = "0.1.0"
+version = "0.2.0"
 description = "A command-line tool that fingerprints files with SHA-256, saves that as a baseline, then flags anything modified, missing, or newly added the next time you check."
 requires-python = ">=3.9"
 readme = "README.md"
@@ -14,6 +14,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Topic :: Security",
 ]

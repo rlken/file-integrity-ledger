@@ -3,9 +3,10 @@
 import json
 import os
 import re
+import sys
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import __version__
 from .hashing import is_excluded
@@ -37,7 +38,9 @@ def validate_manifest(data) -> dict:
     if (
         not isinstance(data.get("root"), str)
         or "\x00" in data["root"]
-        or not Path(data["root"]).is_absolute()
+        or not (
+            PurePosixPath(data["root"]).is_absolute() or PureWindowsPath(data["root"]).is_absolute()
+        )
     ):
         raise ValueError("baseline root must be an absolute path")
     if not isinstance(data.get("created_at"), str):
@@ -106,6 +109,10 @@ def save_manifest(path: Path, data: dict, overwrite: bool = False):
             os.fsync(stream.fileno())
         if overwrite:
             os.replace(temporary, path)
+        elif sys.platform == "win32":
+            # Windows rename fails if the destination exists, including on
+            # filesystems without hard links. POSIX rename would overwrite it.
+            os.rename(temporary, path)
         else:
             # Atomic create-if-absent: never silently replace an existing baseline.
             os.link(temporary, path)

@@ -1,14 +1,19 @@
 import hashlib
 import os
+import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from iledger.hashing import fingerprint, scan_directory, sha256_file
+from helpers import FilesystemTestCase
+
+from iledger.hashing import fingerprint, is_link_or_reparse, scan_directory, sha256_file
 
 
-class HashingTests(unittest.TestCase):
+class HashingTests(FilesystemTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -42,14 +47,54 @@ class HashingTests(unittest.TestCase):
         self.assertEqual(set(files), {"nested/café.txt", ".hidden"})
         self.assertFalse(errors)
 
-    def test_links_and_special_files_are_errors(self):
-        (self.root / "link").symlink_to("absent")
+    def test_links_are_errors(self):
+        self.symlink(self.root / "link", "absent")
         (self.root / "dir").mkdir()
-        (self.root / "dir-link").symlink_to(self.root / "dir", target_is_directory=True)
+        self.symlink(self.root / "dir-link", self.root / "dir", directory=True)
+        files, errors = scan_directory(self.root)
+        self.assertFalse(files)
+        self.assertEqual(set(errors), {"link", "dir-link"})
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX named pipes are not available on Windows")
+    def test_named_pipe_is_an_error(self):
         os.mkfifo(self.root / "pipe")
         files, errors = scan_directory(self.root)
         self.assertFalse(files)
-        self.assertEqual(set(errors), {"link", "dir-link", "pipe"})
+        self.assertEqual(set(errors), {"pipe"})
+
+    def test_binary_control_bytes_are_preserved(self):
+        data = b"line one\r\nline two\x1aafter control-z\x00\xff"
+        file = self.root / "raw bytes.bin"
+        file.write_bytes(data)
+        record = fingerprint(file)
+        self.assertEqual(record["sha256"], hashlib.sha256(data).hexdigest())
+        self.assertEqual(record["size"], len(data))
+
+    def test_reparse_attribute_is_recognized(self):
+        info = SimpleNamespace(
+            st_mode=stat.S_IFREG, st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT
+        )
+        self.assertTrue(is_link_or_reparse(info))
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction integration test")
+    def test_junction_is_rejected_without_traversing_target(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "secret.txt").write_text("outside scan scope")
+        evidence = self.root / "evidence"
+        evidence.mkdir()
+        junction = evidence / "junction"
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(junction), str(outside)],
+            check=True,
+            capture_output=True,
+        )
+        # Remove only the junction, never the target directory.
+        self.addCleanup(os.rmdir, junction)
+        files, errors = scan_directory(evidence)
+        self.assertFalse(files)
+        self.assertEqual(set(errors), {"junction"})
+        self.assertEqual(scan_directory(evidence, ["junction"]), ({}, {}))
 
     def test_file_changed_during_hash_is_rejected(self):
         file = self.root / "changing"

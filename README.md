@@ -30,7 +30,9 @@ Check: CHANGED
 
 ## Try it in two minutes
 
-On macOS or Linux with Python 3.9 or newer:
+Use Python 3.9 or newer. Choose your platform:
+
+### macOS / Linux
 
 ```sh
 git clone https://github.com/rlken/file-integrity-ledger.git
@@ -40,6 +42,20 @@ source .venv/bin/activate
 python -m pip install -e .
 python scripts/demo.py
 ```
+
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/rlken/file-integrity-ledger.git
+cd file-integrity-ledger
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe scripts/demo.py
+```
+
+These commands use the environment's executable directly; no activation or
+PowerShell execution-policy change is needed. Use `.\.venv\Scripts\iledger.exe`
+in place of `iledger` in the examples below. Quote paths containing spaces.
 
 The demo creates fictional evidence under a new `demo-output/case-…/` folder. It
 checks an unchanged baseline, makes three deliberate changes, and verifies the
@@ -60,7 +76,7 @@ what those findings can—and cannot—establish.
 - **Protected baselines:** atomic file replacement and explicit overwrite opt-in.
 - **Scriptable results:** separate exit codes for unchanged, changed, and error.
 - **Tested behavior:** regression tests, branch coverage, formatting/lint checks,
-  and a CI matrix for macOS and Linux.
+  and a CI matrix for Windows, macOS, and Linux.
 
 ## Everyday commands
 
@@ -150,8 +166,27 @@ changes, but do not guarantee consistency against a hostile process changing the
 directory tree. Reads may update access times. Use a stable copy or snapshot when
 repeatability matters.
 
-Windows is not currently a supported/tested platform. The initial support target
-is macOS and Linux.
+### Windows filesystem notes
+
+Windows support is exercised on GitHub's Windows runner with Python 3.9 and 3.14,
+including an isolated wheel installation. Files are opened in binary mode so
+CRLF newlines and control bytes are hashed exactly as stored.
+
+Directory junctions and other Windows reparse points are rejected, just like
+symbolic links. This can include cloud-managed placeholders; use ordinary local
+copies or explicitly exclude those paths. Errors never become a clean check.
+
+Manifests can be inspected on any supported platform. To check a copy moved
+between Windows and macOS/Linux, pass `--root` with its new location. Contents
+and relative filenames must be preserved: case-only renames, line-ending
+conversions, and names unsupported by the destination filesystem affect the
+comparison. Exclusion patterns and manifest paths always use `/`, even on Windows.
+
+To save a JSON report in PowerShell, specify the output encoding explicitly:
+
+```powershell
+.\.venv\Scripts\iledger.exe check .\case-baseline.json --json | Set-Content -Encoding utf8 .\case-report.json
+```
 
 ## Develop and test
 
