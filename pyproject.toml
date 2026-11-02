@@ -1,0 +1,58 @@
+[project]
+name = "iledger"
+version = "0.1.0"
+description = "A command-line tool that fingerprints files with SHA-256, saves that as a baseline, then flags anything modified, missing, or newly added the next time you check."
+requires-python = ">=3.9"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Ralph Punzalan"}]
+keywords = ["file-integrity", "digital-forensics", "sha256", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+dependencies = [
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rlken/file-integrity-ledger"
+Issues = "https://github.com/rlken/file-integrity-ledger/issues"
+
+[project.optional-dependencies]
+dev = ["ruff>=0.9,<1", "coverage>=7.6,<8", "build>=1.2,<2"]
+
+[project.scripts]
+iledger = "iledger.cli:app"
+
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["iledger*"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = ["build", "dist", "demo-output"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.coverage.run]
+source = ["iledger"]
+branch = true
+omit = ["iledger/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
